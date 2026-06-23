@@ -6,6 +6,8 @@ import faiss
 import numpy as np
 import pickle
 
+from app.functions import clean_text
+
 # Embedder initialization
 embedder = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
@@ -43,6 +45,10 @@ for disorder in disorder_folders:
 for metadata in METADATA:
     chunks = text_splitter.split_text(metadata["text"])
     for chunk in chunks:
+        if len(chunk.strip()) < 100:
+            continue
+        chunk = clean_text(chunk)
+        
         CHUNKED_DOCUMENTS.append({"text": chunk, "category": metadata["category"], "document": metadata["document"], "source": metadata["source"]})
 
 print(f"Total chunks created: {len(CHUNKED_DOCUMENTS)}")
@@ -57,8 +63,10 @@ print(len(CHUNKED_DOCUMENTS))
 print(embeddings.shape)
 
 dimension = embeddings.shape[1]
-index = faiss.IndexFlatL2(dimension)
-index.add(embeddings.astype(np.float32))
+embeddings = embeddings.astype(np.float32)
+faiss.normalize_L2(embeddings)
+index = faiss.IndexFlatIP(dimension)
+index.add(embeddings)
 print("Vector store created with FAISS. Total vectors indexed:", index.ntotal)
 
 os.makedirs("vector_store", exist_ok=True)
