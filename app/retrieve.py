@@ -2,6 +2,8 @@ import faiss
 import pickle
 from config import EMBEDDER as embedder
 import numpy as np
+from copy import deepcopy
+from functions import clean_text
 
 print("Loading FAISS index...")
 index = faiss.read_index("vector_store/therapy_index.faiss")
@@ -12,30 +14,23 @@ with open("vector_store/metadata.pkl", "rb") as f:
 print("Metadata loaded successfully.")
 
 def query_search(user_query, top_k=5):
-    query_embeddings = embedder.encode([user_query], show_progress_bar=True, convert_to_numpy=True)
+    user_query = clean_text(user_query)
+    query_embeddings = embedder.encode([user_query], show_progress_bar=False, convert_to_numpy=True)
     query_embeddings = query_embeddings.astype(np.float32)
     faiss.normalize_L2(query_embeddings)
     scores, indices = index.search(query_embeddings, k=top_k)
-    print("\nTop Results:\n")
+
     metadata_results = [metadata[idx] for idx in indices[0]]
-    for idx, score in enumerate(scores[0]):
-        print(f"Result {idx + 1}: Score = {score:.4f}")
-        print(f"Metadata: {metadata_results[idx]}")
-        print("=" * 80)
+
 
     results = []
     for rank, idx in enumerate(indices[0]):
-        result = {
-            "rank": rank + 1,
-            "score": float(scores[0][rank]),
-            "category": metadata[idx]["category"],
-            "document": metadata[idx]["document"],
-            "text": metadata[idx]["text"]
-        }
-        results.append(result)
+        doc = deepcopy(metadata[idx])
+        doc.metadata["score"] = float(scores[0][rank])
+        doc.metadata["rank"] = rank + 1
+        results.append(doc)
 
-    filtered_results = [result for result in results if result["score"] > 0.5]  # Filter results based on a score threshold
+    filtered_results = [result for result in results if result.metadata["score"] > 0.5]  # Filter results based on a score threshold
     if not filtered_results:
-        print("No results with a score above the threshold. Adding the top result anyway.")
         return results
     return filtered_results

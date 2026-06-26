@@ -5,8 +5,8 @@ from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
 import pickle
-
-from app.functions import clean_text
+from langchain_core.documents import Document
+from functions import clean_text
 
 # Embedder initialization
 embedder = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
@@ -49,11 +49,20 @@ for metadata in METADATA:
             continue
         chunk = clean_text(chunk)
         
-        CHUNKED_DOCUMENTS.append({"text": chunk, "category": metadata["category"], "document": metadata["document"], "source": metadata["source"]})
+        CHUNKED_DOCUMENTS.append(
+            Document(
+                page_content=chunk,
+                metadata={
+                    "category": metadata["category"],
+                    "document": metadata["document"],
+                    "source": metadata["source"]
+                }
+            )
+        )
 
 print(f"Total chunks created: {len(CHUNKED_DOCUMENTS)}")
 
-chunk_texts = [doc["text"] for doc in CHUNKED_DOCUMENTS]
+chunk_texts = [doc.page_content for doc in CHUNKED_DOCUMENTS]
 embeddings = embedder.encode(chunk_texts, show_progress_bar=True, convert_to_numpy=True)
 
 print("Embeddings generated for all chunks.")
@@ -82,33 +91,3 @@ print("Saving metadata...")
 with open("vector_store/metadata.pkl", "wb") as f:
     pickle.dump(CHUNKED_DOCUMENTS, f)
 print("Metadata saved successfully.")
-
-
-
-
-# QUICK TEST
-query = "Why do people seek reassurance?"
-
-query_embedding = embedder.encode(
-    [query],
-    convert_to_numpy=True
-)
-
-distances, indices = index.search(
-    query_embedding.astype(np.float32),
-    k=5
-)
-
-print("\nTop Results:\n")
-
-for idx in indices[0]:
-
-    print("=" * 80)
-
-    print(CHUNKED_DOCUMENTS[idx]["category"])
-
-    print(CHUNKED_DOCUMENTS[idx]["document"])
-
-    print(CHUNKED_DOCUMENTS[idx]["text"][:500])
-
-
